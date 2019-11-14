@@ -6,4 +6,6 @@ edition = "2018"
 
 [dependencies]
 rstar = "0.5.1"
+[dev-dependencies]
 bbox-2d = { git="https://github.com/intdxdt/bbox-2d", branch="master"}
+geom-2d = { git="https://github.com/intdxdt/geom-2d", branch="master"}
