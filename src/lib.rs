@@ -33,6 +33,9 @@ impl<T> RTree<T> where T: RTreeObject + PointDistance {
         self.index.insert(item)
     }
 
+    pub fn remove_at_point(&mut self, point: &<T::Envelope as Envelope>::Point) -> Option<T> {
+        self.index.remove_at_point(point)
+    }
 
     pub fn size(&self) -> usize {
         self.index.size()
@@ -57,6 +60,7 @@ impl<T> RTree<T> where T: RTreeObject + PointDistance {
 //    }
 
     pub fn nearest_neighbor(&self, query_pt: &<T::Envelope as Envelope>::Point) -> Option<&T> {
+
         self.index.nearest_neighbor(query_pt)
     }
 }
