@@ -76,6 +76,14 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         self.index.size()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.index.size() == 0
+    }
+
+    pub fn clear(&mut self) {
+        self.index = Index::new()
+    }
+
     pub fn search(&self, envelope: &T::Envelope) -> Vec<&T> {
         let elements = self.index.locate_in_envelope_intersecting(
             envelope
