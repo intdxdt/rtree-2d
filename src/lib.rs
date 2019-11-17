@@ -4,6 +4,7 @@ pub use rstar::{
     Envelope,
     PointDistance,
     ParentNode,
+    AABB
 };
 
 #[derive(Clone, Debug)]
