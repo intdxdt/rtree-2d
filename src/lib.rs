@@ -1,4 +1,4 @@
-use rstar::{
+pub use rstar::{
     RTreeObject,
     RTree as Index,
     Envelope,
@@ -48,9 +48,8 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         RTree { index: Index::new() }
     }
 
-
-    pub fn load(item: Vec<T>) -> Self {
-        RTree { index: Index::bulk_load(item) }
+    pub fn load(items: Vec<T>) -> Self {
+        RTree { index: Index::bulk_load(items) }
     }
 
     pub fn root(&self) -> &ParentNode<T> {
