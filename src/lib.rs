@@ -1,11 +1,19 @@
+mod kobj;
+
 pub use rstar::{
     RTreeObject,
     RTree as Index,
     Envelope,
+    Point,
     PointDistance,
     ParentNode,
-    AABB
+    AABB,
 };
+use std::collections::BinaryHeap;
+use kobj::KObj;
+use bbox_2d::MBR;
+use math_util::{num, NumCast};
+use rstar::RTreeNode;
 
 #[derive(Clone, Debug)]
 pub struct RTree<T> where T: RTreeObject {
@@ -94,6 +102,53 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         }
         results
     }
+
+    pub fn knn_min_dist(
+        &self, query: &T,
+        distScore: fn(query: &T, dbitem: &T) -> (f64, f64),
+        predicate: impl Fn(KObj) -> bool,
+    ) {
+        let as_mbr = |envelope: &T::Envelope| {
+            let ll = envelope.lower_left();
+            let ur = envelope.upper_right();
+            MBR::new(
+                num::cast(ll.nth(0)).unwrap(),
+                num::cast(ll.nth(1)).unwrap(),
+                num::cast(ur.nth(0)).unwrap(),
+                num::cast(ur.nth(1)).unwrap(),
+            )
+        };
+
+        let query_box = as_mbr(&query.envelope());
+        let nd = Some(self.index.root());
+        let children = nd.unwrap().children();
+        let stop: bool = false;
+        let mut queue = BinaryHeap::new();
+        let mindist = std::f64::MAX;
+
+
+        'outer: while !stop && nd.is_some() {
+            for child in nd.unwrap().children().iter() {
+                let child_box = as_mbr(&child.envelope());
+                let box_dist = child_box.distance(&query_box);
+                if box_dist < mindist {
+                    let mut o = KObj {
+                        distance: 0f64,
+                        is_item: child.is_leaf(),
+                        mbr: child_box,
+                    };
+                    match child {
+                        RTreeNode::Leaf(ref item) => {
+                            let (o_dist, mindist) = distScore(query, item);
+                            o.distance = o_dist;
+                        }
+                        _ => {}
+                    }
+                    queue.push(o)
+                }
+            }
+        }
+    }
 }
 
 
@@ -112,7 +167,7 @@ mod tests {
 
     impl Pt {
         pub fn equals(&self, other: &Pt) -> bool {
-            self.x.feq(other.x) && self.y.feq(other.y)
+            self.x.feq(other.x) & &self.y.feq(other.y)
         }
     }
 
@@ -183,7 +238,7 @@ mod tests {
         }
 
         pub fn equals(&self, other: &Self) -> bool {
-            self.ll.equals(&other.ll) && self.ur.equals(&other.ur)
+            self.ll.equals(&other.ll) & &self.ur.equals(&other.ur)
         }
 
         pub fn intersects(&self, other: &Self) -> bool {
@@ -266,6 +321,18 @@ mod tests {
         ];
         let mut tree = RTree::load(items);
         assert_eq!(tree.size(), 3);
+        let dist = std::f64::MAX;
+        let query = MonoMBR::new(Pt { x: 0., y: 0. }, Pt { x: 1., y: 1. }, 0, 3);
+        tree.knn_min_dist(
+            &query,
+            |query: &MonoMBR, item: &MonoMBR| {
+                (3.4, 6.7)
+            },
+            |o: KObj| {
+                o.distance > dist || dist == 0.0 //add to neibs, stop
+            },
+        );
+
         println!("{}", MonoMBR::from(tree.root().envelope()).wkt());
 
         let query = MonoMBR::new(Pt { x: 2.5, y: 0.5 }, Pt { x: 4.0, y: 2.5 }, 0, 9);
