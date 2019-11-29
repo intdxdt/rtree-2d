@@ -15,6 +15,7 @@ use bbox_2d::MBR;
 use math_util::{num, NumCast};
 use rstar::RTreeNode;
 
+
 #[derive(Clone, Debug)]
 pub struct RTree<T> where T: RTreeObject {
     index: Index<T>,
@@ -105,9 +106,13 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
 
     pub fn knn_min_dist(
         &self, query: &T,
-        distScore: fn(query: &T, dbitem: &T) -> (f64, f64),
-        predicate: impl Fn(KObj) -> bool,
+        fn_dist_score: fn(query: &T, dbitem: &T) -> (f64, f64),
+        fn_predicate: impl Fn(KObj) -> bool,
     ) {
+        if self.is_empty() {
+            return;
+        }
+
         let as_mbr = |envelope: &T::Envelope| {
             let ll = envelope.lower_left();
             let ur = envelope.upper_right();
@@ -120,12 +125,12 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         };
 
         let query_box = as_mbr(&query.envelope());
-        let nd = Some(self.index.root());
-        let children = nd.unwrap().children();
-        let stop: bool = false;
+        let mut parents = vec![Some(self.index.root())];
+        let mut nd = parents[0];
+        let mut stop: bool = false;
         let mut queue = BinaryHeap::new();
         let mindist = std::f64::MAX;
-
+        let null_idx = std::usize::MAX;
 
         'outer: while !stop && nd.is_some() {
             for child in nd.unwrap().children().iter() {
@@ -136,15 +141,36 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
                         distance: 0f64,
                         is_item: child.is_leaf(),
                         mbr: child_box,
+                        node: null_idx,
                     };
                     match child {
                         RTreeNode::Leaf(ref item) => {
-                            let (o_dist, mindist) = distScore(query, item);
+                            let (o_dist, mindist) = fn_dist_score(query, item);
                             o.distance = o_dist;
                         }
-                        _ => {}
+                        RTreeNode::Parent(ref p)=> {
+                            o.node = parents.len();
+                            parents.push(Some(p));
+                        }
                     }
                     queue.push(o)
+                }
+            }
+
+            while !queue.is_empty() && queue.peek().unwrap().is_item {
+                let candidate = queue.pop().unwrap();
+                stop = fn_predicate(candidate);
+                if stop {
+                    break;
+                }
+            }
+
+            if !stop {
+                let q = queue.pop();
+                if q.is_none() {
+                    nd = None
+                } else {
+                    nd = parents[q.unwrap().node]
                 }
             }
         }
@@ -328,7 +354,7 @@ mod tests {
             |query: &MonoMBR, item: &MonoMBR| {
                 (3.4, 6.7)
             },
-            |o: KObj| {
+            |o| {
                 o.distance > dist || dist == 0.0 //add to neibs, stop
             },
         );
