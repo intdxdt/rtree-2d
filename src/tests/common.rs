@@ -1,6 +1,8 @@
 use coordinate::Coordinate;
-use math_util::{num, NumCast,Feq, EPSILON};
+use math_util::{num, NumCast, Feq, EPSILON};
 use rstar::{AABB, RTreeObject, PointDistance};
+use crate::kobj::KObj;
+use crate::RTree;
 
 #[derive(Copy, Clone, PartialOrd, Debug)]
 pub struct Pt {
@@ -9,7 +11,7 @@ pub struct Pt {
 }
 
 pub struct Pts {
-    pub pts : Vec<Pt>
+    pub pts: Vec<Pt>
 }
 
 impl Pt {
@@ -163,7 +165,7 @@ impl<T> From<Vec<[T; 2]>> for Pts where T: NumCast + Copy {
         for array in items {
             pts.push(array.into())
         }
-        Pts {pts }
+        Pts { pts }
     }
 }
 
@@ -182,12 +184,13 @@ impl PointDistance for MonoMBR {
 }
 
 // brute force distance
-fn min_dist_brute_force(ln: &Vec<Pt>, ln2: &Vec<Pt>) -> f64 {
+pub fn min_dist_brute_force(ln: &Vec<Pt>, ln2: &Vec<Pt>) -> f64 {
     let mut dist = std::f64::MAX;
     let mut bln = false;
     let (n1, n2) = (ln.len() - 1, ln2.len() - 1);
-    let (mut i, mut j) = (0usize, 0);
+    let mut i = 0;
     while !bln && i < n1 {
+        let mut j = 0;
         while !bln && j < n2 {
             let d = seg_seg_distance(ln[i], ln[i + 1], ln2[j], ln2[j + 1]);
             if d < dist {
@@ -203,9 +206,55 @@ fn min_dist_brute_force(ln: &Vec<Pt>, ln2: &Vec<Pt>) -> f64 {
 }
 
 
+pub fn knn_min_linear_distance(a_coords: &Vec<Pt>, b_coords: &Vec<Pt>) -> f64 {
+    let ( a, b) = if a_coords.len() > b_coords.len() {
+        (b_coords, a_coords)
+    } else {
+        (a_coords, b_coords)
+    };
+
+    let db = segment_db(b);
+    let queries = query_bounds(a);
+
+    let mut min_dist = std::f64::MAX;
+    let dist_fn = |query: &MonoMBR, item: &MonoMBR| {
+        seg_seg_distance(a[query.i], a[query.j], b[item.i], b[item.j])
+    };
+    let pred_fn = |o: KObj, dist: f64| {
+        o.distance > dist || dist == 0f64 //add to neibs, stop
+    };
+    for q in queries.iter() {
+        min_dist = db.knn_min_dist(q, dist_fn, pred_fn, min_dist)
+    }
+
+    return min_dist;
+}
+
+
+pub fn segment_db(coords: &Vec<Pt>) -> RTree<MonoMBR> {
+    let n = coords.len() - 1;
+    let mut items = Vec::with_capacity(n);
+    for i in 0..n {
+        let j = i + 1;
+        items.push(MonoMBR::new(coords[i], coords[j], i, j));
+    }
+    RTree::load(items)
+}
+
+fn query_bounds(coords: &Vec<Pt>) -> Vec<MonoMBR> {
+    let n = coords.len() - 1;
+    let mut items = Vec::with_capacity(n);
+    for i in 0..n {
+        let j = i + 1;
+        items.push(MonoMBR::new(coords[i], coords[j], i, j))
+    }
+    return items;
+}
+
+
 //Distance betwen two segments with custom hypot function
-fn seg_seg_distance(sa: Pt, sb: Pt, oa: Pt, ob: Pt) -> f64 {
-    let mut dist = std::f64::NAN;
+pub fn seg_seg_distance(sa: Pt, sb: Pt, oa: Pt, ob: Pt) -> f64 {
+    let mut dist;
     let (x1, y1) = (sa.x, sa.y);
     let (x2, y2) = (sb.x, sb.y);
 
@@ -226,7 +275,6 @@ fn seg_seg_distance(sa: Pt, sb: Pt, oa: Pt, ob: Pt) -> f64 {
         if is_aspt_a && is_aspt_b {
             dist = (x1 - x4).hypot(y1 - y4)
         } else if is_aspt_a || is_aspt_b {
-
             let (lna, lnb) = if is_aspt_a {
                 pta = sa;
                 (oa, ob)

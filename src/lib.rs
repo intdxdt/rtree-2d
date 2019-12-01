@@ -104,13 +104,11 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         results
     }
 
-    pub fn knn_min_dist(
-        &self, query: &T,
-        fn_dist_score: fn(query: &T, dbitem: &T) -> (f64, f64),
-        fn_predicate: impl Fn(KObj) -> bool,
-    ) {
+    pub fn knn_min_dist(&self, query: &T,
+                        fn_dist_score: impl Fn(&T, &T) -> f64,
+                        fn_predicate: impl Fn(KObj, f64) -> bool, mut mindist: f64) -> f64{
         if self.is_empty() {
-            return;
+            return std::f64::NAN;
         }
 
         let as_mbr = |envelope: &T::Envelope| {
@@ -129,7 +127,6 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         let mut nd = parents[0];
         let mut stop: bool = false;
         let mut queue = BinaryHeap::new();
-        let mindist = std::f64::MAX;
         let null_idx = std::usize::MAX;
 
         'outer: while !stop && nd.is_some() {
@@ -145,10 +142,12 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
                     };
                     match child {
                         RTreeNode::Leaf(ref item) => {
-                            let (o_dist, mindist) = fn_dist_score(query, item);
-                            o.distance = o_dist;
+                            o.distance = fn_dist_score(query, item);
+                            if o.distance < mindist {
+                                mindist = o.distance
+                            }
                         }
-                        RTreeNode::Parent(ref p)=> {
+                        RTreeNode::Parent(ref p) => {
                             o.node = parents.len();
                             parents.push(Some(p));
                         }
@@ -159,7 +158,7 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
 
             while !queue.is_empty() && queue.peek().unwrap().is_item {
                 let candidate = queue.pop().unwrap();
-                stop = fn_predicate(candidate);
+                stop = fn_predicate(candidate, mindist);
                 if stop {
                     break;
                 }
@@ -174,6 +173,7 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
                 }
             }
         }
+        mindist
     }
 }
 
