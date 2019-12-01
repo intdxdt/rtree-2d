@@ -1,5 +1,3 @@
-mod kobj;
-
 pub use rstar::{
     RTreeObject,
     RTree as Index,
@@ -10,10 +8,12 @@ pub use rstar::{
     AABB,
 };
 use std::collections::BinaryHeap;
-use kobj::KObj;
 use bbox_2d::MBR;
-use math_util::{num, NumCast};
+use math_util::{num, NumCast, Feq};
 use rstar::RTreeNode;
+
+mod kobj;
+use kobj::KObj;
 
 
 #[derive(Clone, Debug)]

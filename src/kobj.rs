@@ -1,9 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use math_util::Feq;
 use bbox_2d::MBR;
 use rstar::{RTreeObject, RTreeNode, ParentNode};
-
+use crate::Feq;
 
 ///
 ///Min - Heap KObj
