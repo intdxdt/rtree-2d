@@ -9,7 +9,7 @@ pub use rstar::{
 };
 use std::collections::BinaryHeap;
 use bbox_2d::MBR;
-use math_util::{num, NumCast, Feq};
+use math_util::{num, NumCast};
 use rstar::RTreeNode;
 
 mod kobj;
