@@ -5,9 +5,9 @@ authors = ["Titus Tienaah <titus.intdxdt@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+math-util = { git="https://github.com/intdxdt/math-util", branch="master"}
 bbox-2d = { git="https://github.com/intdxdt/bbox-2d", branch="master"}
 rstar = { git="https://github.com/intdxdt/rstar", branch="master"}
 
 [dev-dependencies]
-math-util = { git="https://github.com/intdxdt/math-util", branch="master"}
 coordinate = { git="https://github.com/intdxdt/coordinate", branch="master"}
