@@ -252,7 +252,7 @@ fn query_bounds(coords: &Vec<Pt>) -> Vec<MonoMBR> {
 }
 
 
-//Distance betwen two segments with custom hypot function
+//Distance between two segments with custom hypot function
 pub fn seg_seg_distance(sa: Pt, sb: Pt, oa: Pt, ob: Pt) -> f64 {
     let mut dist;
     let (x1, y1) = (sa.x, sa.y);

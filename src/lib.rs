@@ -13,7 +13,7 @@ use math_util::{num, NumCast};
 use rstar::RTreeNode;
 
 mod kobj;
-use kobj::KObj;
+pub use kobj::KObj;
 
 
 #[derive(Clone, Debug)]
