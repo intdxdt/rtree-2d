@@ -15,6 +15,7 @@ fn test_rtree() {
         MonoMBR::new(Pt { x: 4., y: 2. }, Pt { x: 7.0, y: 3.0 }, 7, 11),
     ];
     let mut tree = RTree::load(items);
+
     assert_eq!(tree.size(), 3);
     let query = MonoMBR::new(Pt { x: 2.5, y: 0.5 }, Pt { x: 4.0, y: 2.5 }, 0, 9);
     let res = tree.search(&query.envelope());

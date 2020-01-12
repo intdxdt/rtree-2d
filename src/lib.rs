@@ -18,7 +18,7 @@ pub use kobj::KObj;
 
 #[derive(Clone, Debug)]
 pub struct RTree<T> where T: RTreeObject {
-    index: Index<T>,
+    pub index: Index<T>
 }
 
 impl<T> RTree<T> where T: RTreeObject + PartialEq {
