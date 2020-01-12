@@ -13,6 +13,7 @@ use math_util::{num, NumCast};
 use rstar::RTreeNode;
 
 mod kobj;
+
 pub use kobj::KObj;
 
 
@@ -103,26 +104,105 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         }
         results
     }
+}
+
+impl<T> RTree<T>  where T: RTreeObject{
+    #[inline]
+    pub fn max_output_sentinel() -> usize {
+        std::usize::MAX
+    }
+
+    #[inline]
+    pub fn knn_predicate(o: KObj) -> (bool, bool) {
+        (true, false)
+    }
+}
+
+impl<T> RTree<T> where T: RTreeObject + Clone {
+    fn env_mbr(envelope: &T::Envelope) -> MBR {
+        let ll = envelope.lower_left();
+        let ur = envelope.upper_right();
+        MBR::new(
+            num::cast(ll.nth(0)).unwrap(),
+            num::cast(ll.nth(1)).unwrap(),
+            num::cast(ur.nth(0)).unwrap(),
+            num::cast(ur.nth(1)).unwrap(),
+        )
+    }
+
+    pub fn knn(&self, query: &T, limit: usize,
+               fn_dist_score: impl Fn(&T, Option<&T>, KObj) -> f64,
+               fn_predicate: impl Fn(KObj) -> (bool, bool)) -> Vec<&T> {
+        let mut result = vec![];
+        let query_box = RTree::<T>::env_mbr(&query.envelope());
+        let mut parents = vec![Some(self.index.root())];
+        let mut leaves = vec![];
+        let mut nd = parents[0];
+        let (mut pred, mut stop) = (false, false);
+        let mut queue = BinaryHeap::new();
+        let null_idx = std::usize::MAX;
+
+        'outer: while !stop && nd.is_some() {
+            for child in nd.unwrap().children().iter() {
+                let child_box = RTree::<T>::env_mbr(&child.envelope());
+                let box_dist = child_box.distance(&query_box);
+                let mut o = KObj {
+                    distance: 0f64,
+                    is_item: child.is_leaf(),
+                    mbr: child_box,
+                    node: null_idx,
+                };
+                match child {
+                    RTreeNode::Leaf(ref item) => {
+                        o.distance = fn_dist_score(query, Some(item), o);
+                        o.node = leaves.len();
+                        leaves.push(item);
+                    }
+                    RTreeNode::Parent(ref p) => {
+                        o.distance = fn_dist_score(query, None, o);
+                        o.node = parents.len();
+                        parents.push(Some(p));
+                    }
+                }
+                queue.push(o)
+            }
+
+            //check leaves
+            while !queue.is_empty() && queue.peek().unwrap().is_item {
+                let candidate = queue.pop().unwrap();
+                let pred_stop = fn_predicate(candidate);
+                pred = pred_stop.0;
+                stop = pred_stop.1;
+
+                if pred {
+                    result.push(leaves[candidate.node]);
+                }
+                if stop {
+                    break;
+                }
+                if limit != 0 && result.len() == limit {
+                    return result;
+                }
+            }
+            //check parents
+            if !stop {
+                let q = queue.pop();
+                nd = if q.is_none() { None } else { parents[q.unwrap().node] };
+            }
+        }
+        result
+    }
+
 
     pub fn knn_min_dist(&self, query: &T,
                         fn_dist_score: impl Fn(&T, &T) -> f64,
-                        fn_predicate: impl Fn(KObj, f64) -> bool, mut mindist: f64) -> f64{
+                        fn_predicate: impl Fn(KObj, f64) -> bool, mut mindist: f64) -> f64 {
         if self.is_empty() {
             return std::f64::NAN;
         }
 
-        let as_mbr = |envelope: &T::Envelope| {
-            let ll = envelope.lower_left();
-            let ur = envelope.upper_right();
-            MBR::new(
-                num::cast(ll.nth(0)).unwrap(),
-                num::cast(ll.nth(1)).unwrap(),
-                num::cast(ur.nth(0)).unwrap(),
-                num::cast(ur.nth(1)).unwrap(),
-            )
-        };
 
-        let query_box = as_mbr(&query.envelope());
+        let query_box = RTree::<T>::env_mbr(&query.envelope());
         let mut parents = vec![Some(self.index.root())];
         let mut nd = parents[0];
         let mut stop: bool = false;
@@ -131,7 +211,7 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
 
         'outer: while !stop && nd.is_some() {
             for child in nd.unwrap().children().iter() {
-                let child_box = as_mbr(&child.envelope());
+                let child_box = RTree::<T>::env_mbr(&child.envelope());
                 let box_dist = child_box.distance(&query_box);
                 if box_dist < mindist {
                     let mut o = KObj {
@@ -166,11 +246,7 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
 
             if !stop {
                 let q = queue.pop();
-                if q.is_none() {
-                    nd = None
-                } else {
-                    nd = parents[q.unwrap().node]
-                }
+                nd = if q.is_none() { None } else { parents[q.unwrap().node] };
             }
         }
         mindist
