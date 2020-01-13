@@ -1,28 +1,28 @@
 mod common;
-
-use coordinate::Coordinate;
-use math_util::Feq;
-use rstar::{AABB, Envelope};
 use common::{MonoMBR, Pt};
 use super::{*};
 use crate::tests::common::{min_dist_brute_force, Pts, knn_min_linear_distance};
+use math_util::{Numeric, NumCast, num};
 
-fn array_mbr(arr: [i32; 4]) -> MBR {
-    let o = arr.iter().map(|v| *v as f64).collect::<Vec<f64>>();
-    MBR::new(o[0], o[1], o[2], o[3])
+fn array_as_mbr<T>(o: [T; 4]) -> MBR where T: Numeric + NumCast + Copy {
+    MBR::new_from_array([
+        num::cast(o[0]).unwrap(),
+        num::cast(o[1]).unwrap(),
+        num::cast(o[2]).unwrap(),
+        num::cast(o[3]).unwrap(),
+    ])
 }
 
-fn scoreFn(q: &[i32; 4], obj: Option<&[i32; 4]>, boxer: KObj) -> f64 {
-    let query = array_mbr(*q);
+fn score_fn(query: &MBR, _: Option<&MBR>, boxer: KObj) -> f64 {
     query.distance(&boxer.mbr)
 }
 
-fn knn_predicate(o: KObj) -> (bool, bool) {
+fn knn_predicate(_: KObj) -> (bool, bool) {
     (true, false)
 }
 
-fn init_knn() -> Vec<[i32; 4]> {
-    let dat = vec![
+fn init_knn() -> Vec<MBR> {
+    let data = vec![
         [87, 55, 87, 56], [38, 13, 39, 16], [7, 47, 8, 47], [89, 9, 91, 12], [4, 58, 5, 60], [0, 11, 1, 12], [0, 5, 0, 6], [69, 78, 73, 78],
         [56, 77, 57, 81], [23, 7, 24, 9], [68, 24, 70, 26], [31, 47, 33, 50], [11, 13, 14, 15], [1, 80, 1, 80], [72, 90, 72, 91], [59, 79, 61, 83],
         [98, 77, 101, 77], [11, 55, 14, 56], [98, 4, 100, 6], [21, 54, 23, 58], [44, 74, 48, 74], [70, 57, 70, 61], [32, 9, 33, 12], [43, 87, 44, 91],
@@ -37,21 +37,27 @@ fn init_knn() -> Vec<[i32; 4]> {
         [1, 14, 1, 14], [33, 77, 34, 77], [94, 56, 98, 59], [75, 25, 78, 26], [17, 73, 20, 74], [11, 3, 12, 4], [45, 12, 47, 12], [38, 39, 39, 39],
         [99, 3, 103, 5], [41, 92, 44, 96], [79, 40, 79, 41], [29, 2, 29, 4],
     ];
-//    let mut data = Vec::with_capacity(dat.len());
-//    for d in dat.iter() {
-//        let o = d.iter().map(|v| *v as f64).collect::<Vec<f64>>();
-////        data.push(MBR::new(o[0], o[1], o[2], o[3]));
-//        data.push([o[0], o[1], o[2], o[3]]);
-//    }
-//    data
-    dat
+    knn_data_as_mbr(data)
 }
 
-fn found_in(query: &[i32; 4], haystack: &Vec<[i32; 4]>) -> bool {
+fn knn_data_as_f64<T>(data: Vec<[T; 4]>) -> Vec<[f64; 4]> where T: Numeric + NumCast + Copy {
+    data.iter().map(|o| [
+        num::cast(o[0]).unwrap(),
+        num::cast(o[1]).unwrap(),
+        num::cast(o[2]).unwrap(),
+        num::cast(o[3]).unwrap(),
+    ]).collect()
+}
+
+fn knn_data_as_mbr<T>(data: Vec<[T; 4]>) -> Vec<MBR> where T: Numeric + NumCast + Copy {
+    let data = knn_data_as_f64(data);
+    data.into_iter().map(|v| MBR::new_from_array(v)).collect()
+}
+
+fn found_in(needle: &MBR, haystack: &Vec<MBR>) -> bool {
     let mut found = false;
-    let needle = array_mbr(*query);
     for o in haystack.iter() {
-        found = needle.equals(&array_mbr(*o));
+        found = needle.equals(&o);
         if found {
             break;
         }
@@ -95,23 +101,52 @@ fn test_rtree() {
 #[test]
 fn knn_tree_knn() {
     let items = init_knn();
-    let mut rt = RTree::load(items);
-    let query = [40, 40, 40, 40];
-    let nn = rt.knn(&query, 10, scoreFn, knn_predicate);
+    let rt = RTree::load(items);
+    let query = array_as_mbr([40, 40, 40, 40]);
+    let nn = rt.knn(&query, 10, score_fn, knn_predicate);
     let result = vec![
         [38, 39, 39, 39], [35, 39, 38, 40], [34, 43, 36, 44],
         [29, 42, 33, 42], [48, 38, 48, 40], [31, 47, 33, 50],
         [34, 29, 34, 32], [29, 45, 31, 47], [39, 52, 39, 56],
         [57, 36, 61, 40]
     ];
+    let result = result.iter()
+        .map(|v| array_as_mbr(*v)).collect::<Vec<MBR>>();
     assert_eq!(result.len(), 10);
     for n in nn {
         assert!(found_in(n, &result));
     }
-    let nn = rt.knn(&query, 1000, scoreFn, knn_predicate);
+    let nn = rt.knn(&query, 1000, score_fn, knn_predicate);
     assert_eq!(nn.len(), init_knn().len());
-
 }
+
+#[test]
+fn knn_tree_custom_predicate_knn() {
+    fn create_predicate(dist: f64) -> impl Fn(KObj) -> (bool, bool) {
+        move |candidate: KObj| -> (bool, bool) {
+            assert!(candidate.is_item);
+            if candidate.distance <= dist  {
+                return (true, false);
+            }
+            return (false, true);
+        }
+    }
+    let data = init_knn();
+    let rt = RTree::load(data);
+    let pred_fn = create_predicate(6.0);
+    let query = MBR::new(
+        74.88825108886668, 82.678427498132,
+        74.88825108886668, 82.678427498132,
+    );
+
+    let res = rt.knn(&query, 10, score_fn, pred_fn);
+    let expected_mbrs = knn_data_as_f64(vec![[69, 78, 73, 78], [71, 87, 71, 88]]);
+    assert_eq!(res.len(), 2);
+    for (i, r) in res.into_iter().enumerate() {
+        assert_eq!(r.as_array(), expected_mbrs[i]);
+    }
+}
+
 
 #[test]
 fn knn_min_dist() {

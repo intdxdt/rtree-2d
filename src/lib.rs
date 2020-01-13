@@ -1,3 +1,5 @@
+mod kobj;
+
 pub use rstar::{
     RTreeObject,
     RTree as Index,
@@ -9,10 +11,8 @@ pub use rstar::{
 };
 use std::collections::BinaryHeap;
 use bbox_2d::MBR;
-use math_util::{num, NumCast};
+use math_util::{num};
 use rstar::RTreeNode;
-
-mod kobj;
 
 pub use kobj::KObj;
 
@@ -106,14 +106,14 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
     }
 }
 
-impl<T> RTree<T>  where T: RTreeObject{
+impl<T> RTree<T> where T: RTreeObject {
     #[inline]
-    pub fn max_output_sentinel() -> usize {
+    pub fn max_sentinel() -> usize {
         std::usize::MAX
     }
 
     #[inline]
-    pub fn knn_predicate(o: KObj) -> (bool, bool) {
+    pub fn knn_predicate(_: KObj) -> (bool, bool) {
         (true, false)
     }
 }
@@ -134,22 +134,20 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
                fn_dist_score: impl Fn(&T, Option<&T>, KObj) -> f64,
                fn_predicate: impl Fn(KObj) -> (bool, bool)) -> Vec<&T> {
         let mut result = vec![];
-        let query_box = RTree::<T>::env_mbr(&query.envelope());
         let mut parents = vec![Some(self.index.root())];
         let mut leaves = vec![];
         let mut nd = parents[0];
-        let (mut pred, mut stop) = (false, false);
+        let mut pred;
+        let mut stop = false;
         let mut queue = BinaryHeap::new();
-        let null_idx = std::usize::MAX;
+        let null_idx = Self::max_sentinel();
 
         'outer: while !stop && nd.is_some() {
             for child in nd.unwrap().children().iter() {
-                let child_box = RTree::<T>::env_mbr(&child.envelope());
-                let box_dist = child_box.distance(&query_box);
                 let mut o = KObj {
                     distance: 0f64,
                     is_item: child.is_leaf(),
-                    mbr: child_box,
+                    mbr: Self::env_mbr(&child.envelope()),
                     node: null_idx,
                 };
                 match child {
@@ -207,7 +205,7 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         let mut nd = parents[0];
         let mut stop: bool = false;
         let mut queue = BinaryHeap::new();
-        let null_idx = std::usize::MAX;
+        let null_idx = Self::max_sentinel();
 
         'outer: while !stop && nd.is_some() {
             for child in nd.unwrap().children().iter() {

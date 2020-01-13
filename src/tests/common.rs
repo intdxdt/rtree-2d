@@ -197,7 +197,7 @@ pub fn min_dist_brute_force(ln: &Vec<Pt>, ln2: &Vec<Pt>) -> f64 {
                 dist = d;
             }
             //dist = minf64(dist, d)
-            bln = (dist == 0.0);
+            bln = 0.0 == dist;
             j += 1;
         }
         i += 1;
@@ -254,7 +254,7 @@ fn query_bounds(coords: &Vec<Pt>) -> Vec<MonoMBR> {
 
 //Distance between two segments with custom hypot function
 pub fn seg_seg_distance(sa: Pt, sb: Pt, oa: Pt, ob: Pt) -> f64 {
-    let mut dist;
+    let  dist;
     let (x1, y1) = (sa.x, sa.y);
     let (x2, y2) = (sb.x, sb.y);
 
@@ -337,7 +337,7 @@ fn min_dist_segment_endpoints(sa: Pt, sb: Pt, oa: Pt, ob: Pt) -> f64 {
     let o_sb = distance_to_point(oa, ob, sb);
     let s_oa = distance_to_point(sa, sb, oa);
     let s_ob = distance_to_point(sa, sb, ob);
-    (o_sa.min(o_sb)).min((s_oa.min(s_ob)))
+    (o_sa.min(o_sb)).min(s_oa.min(s_ob))
 }
 
 //Distance from segment endpoints to point
@@ -364,12 +364,6 @@ fn distance_to_point(sa: Pt, sb: Pt, pt: Pt) -> f64 {
         };
         (px - c_ptx).hypot(py - c_pty)
     }
-}
-
-#[inline]
-///Snap value to zero
-pub fn snap_to_zero(x: f64) -> f64 {
-    if x.feq(0.0) { 0.0 } else { x }
 }
 
 #[inline]
