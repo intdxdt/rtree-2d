@@ -11,8 +11,9 @@ pub use rstar::{
 };
 use std::collections::BinaryHeap;
 use bbox_2d::MBR;
-use math_util::{num};
+use math_util::num;
 use rstar::RTreeNode;
+use std::mem;
 
 pub use kobj::KObj;
 
@@ -104,6 +105,32 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         }
         results
     }
+
+    ///Consume RTree<T> and return all objects in tree
+    pub fn all(mut self) -> Vec<T> {
+        let mut vals = Vec::with_capacity(self.size());
+
+        let mut children = vec![];
+        mem::swap(&mut self.index.root.children, &mut children);
+        let mut data = vec![children];
+
+        while data.len() > 0 {
+            let children = data.pop().unwrap();
+            for child in children.into_iter() {
+                match child {
+                    RTreeNode::Leaf(item) => {
+                        vals.push(item)
+                    }
+                    RTreeNode::Parent(mut nd) => {
+                        let mut children = vec![];
+                        mem::swap(&mut nd.children, &mut children);
+                        data.push(children);
+                    }
+                }
+            }
+        }
+        vals
+    }
 }
 
 impl<T> RTree<T> where T: RTreeObject {
@@ -142,7 +169,7 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         let mut queue = BinaryHeap::new();
         let null_idx = Self::max_sentinel();
 
-        'outer: while !stop && nd.is_some() {
+        while !stop && nd.is_some() {
             for child in nd.unwrap().children().iter() {
                 let mut o = KObj {
                     distance: 0f64,
@@ -207,7 +234,7 @@ impl<T> RTree<T> where T: RTreeObject + Clone {
         let mut queue = BinaryHeap::new();
         let null_idx = Self::max_sentinel();
 
-        'outer: while !stop && nd.is_some() {
+        while !stop && nd.is_some() {
             for child in nd.unwrap().children().iter() {
                 let child_box = RTree::<T>::env_mbr(&child.envelope());
                 let box_dist = child_box.distance(&query_box);

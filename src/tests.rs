@@ -1,4 +1,5 @@
 mod common;
+
 use common::{MonoMBR, Pt};
 use super::{*};
 use crate::tests::common::{min_dist_brute_force, Pts, knn_min_linear_distance};
@@ -96,6 +97,12 @@ fn test_rtree() {
     tree.each(|v| println!("{}", v.wkt()));
     let rt = tree.rtree();
     assert_eq!(rt.size(), 2);
+
+    let items = init_knn();
+    let n = items.len();
+    let rt = RTree::load(items);
+    let all_items = rt.all();
+    assert_eq!(all_items.len(), n);
 }
 
 #[test]
@@ -125,7 +132,7 @@ fn knn_tree_custom_predicate_knn() {
     fn create_predicate(dist: f64) -> impl Fn(KObj) -> (bool, bool) {
         move |candidate: KObj| -> (bool, bool) {
             assert!(candidate.is_item);
-            if candidate.distance <= dist  {
+            if candidate.distance <= dist {
                 return (true, false);
             }
             return (false, true);
